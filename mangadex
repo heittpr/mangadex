@@ -7,11 +7,11 @@ get() {
 
   [ $# -eq 0 ] &&
     curl -sG "$api$endpoint" |
-    sed 's/\\r//g' && return
+    sed 's/\\r//g' | sed 's/\\n/\\\\n/g' && return
 
   printf ' --data-urlencode "%s"' "$@" |
   xargs curl -sG "$api$endpoint" |
-  sed 's/\\r//g'
+  sed 's/\\r//g' | sed 's/\\n/\\\\n/g'
 }
 
 search() {
