@@ -2,8 +2,16 @@
 
 api='https://api.mangadex.org'
 
+get() {
+  endpoint=$1; shift
+  
+  printf ' --data-urlencode "%s"' "$@" |
+  xargs curl -sG "$api$endpoint" |
+  tr -d '\r'
+}
+
 search() {
-  curl -sG "$api/manga" --data-urlencode "title=$1" |
+  get '/manga' "title=$1" |
   jq -r '.results[0].data.id'
 }
 
