@@ -1,0 +1,10 @@
+#!/bin/sh
+
+api='https://api.mangadex.org'
+
+search() {
+  curl -sG "$api/manga" --data-urlencode "title=$1" |
+  jq -r '.results[0].data.id'
+}
+
+search "tomodachi game"
