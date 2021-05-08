@@ -2,43 +2,73 @@
 
 api='https://api.mangadex.org'
 
+# perform a get request to an API endpoint
 get() {
   endpoint=$1; shift
 
   [ $# -eq 0 ] &&
     curl -sG "$api$endpoint" |
-    sed 's/\\r//g' | sed 's/\\n/\\\\n/g' && return
+    sed 's/\\r//g' && return
 
   printf ' --data-urlencode "%s"' "$@" |
   xargs curl -sG "$api$endpoint" |
-  sed 's/\\r//g' | sed 's/\\n/\\\\n/g'
+  sed 's/\\r//g'
 }
 
-search() {
-  get '/manga' "title=$1" |
-  jq -r '.results[0].data.id'
-}
-
-get_chapter() {
-  get '/chapter' "manga=$1" |
-  jq -r ".results[] | select(.data.attributes.chapter==\"$2\")"
+# print a variable ignoring special sequences
+p() {
+  printf '%s' "$*"
 }
 
 get_server() {
   get "/at-home/server/$1" | jq -r '.baseUrl'
 }
 
-id=$(search "tomodachi game")
-chapter=$(get_chapter $id 1)
-chapter_id=$(echo $chapter | jq -r '.data.id')
-chapter_hash=$(echo $chapter | jq -r '.data.attributes.hash')
+title=$(
+  dialog \
+    --title "mangadex" \
+    --inputbox "search" 0 0 \
+    3>&1 1>&2 2>&3 3>&-
+)
+
+res=$(get '/manga' "title=$title" | jq -r '.results | to_entries ')
+key=$(
+  p $res | jq -r '.[] | "\(.key) \"\(.value.data.attributes.title.en)\""' |
+    xargs dialog --menu 'results' 0 0 0 \
+    3>&1 1>&2 2>&3 3>&-
+)
+
+manga=$(p $res | jq -r '.[] | select(.key==0) | .value')
+id=$(p $manga | jq -r '.data.id')
+
+lang=$(
+  dialog \
+    --inputbox "enter your preferred language" 0 0 \
+    3>&1 1>&2 2>&3 3>&-
+)
+
+chapter_list=$(get '/chapter' "manga=$id" "translatedLanguage=$lang" | jq '.results | to_entries')
+
+key=$(
+  p "$chapter_list" |
+    jq -r '.[] | "\(.key) \"\(.value.data.attributes.chapter) - \(.value.data.attributes.title)\""' |
+    xargs dialog \
+      --menu 'select a chapter' 0 0 0 \
+      3>&1 1>&2 2>&3 3>&-
+)
+
+chapter=$(p "$chapter_list" | jq -r ".[] | select(.key==$key) | .value")
+chapter_hash=$(p $chapter | jq -r '.data.attributes.hash')
+chapter_id=$(p $chapter | jq -r '.data.id')
 server=$(get_server $chapter_id)
 
+cd chapter
 page=0
 
-echo $chapter | jq -r ".data.attributes.data[] | \"$server/data/$chapter_hash/\(.)\"" |
+p $chapter | jq -r ".data.attributes.data[] | \"$server/data/$chapter_hash/\(.)\"" |
 while read url; do
-  echo "downloading page $page..."
+  dialog \
+    --infobox "downloading page $page..." 0 0
 
   ext=${url##*.}
   curl -s $url -o "$page.$ext"
